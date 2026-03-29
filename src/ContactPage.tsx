@@ -1,4 +1,5 @@
-import { useState, type FormEvent, type SVGProps } from 'react'
+import { useCallback, useEffect, useId, useState, type FormEvent, type SVGProps } from 'react'
+import GalaxyBackdrop from './components/GalaxyBackdrop'
 
 const navLinks = [
   { label: 'Home', href: '#top' },
@@ -64,13 +65,41 @@ function IconHeadset(props: SVGProps<SVGSVGElement>) {
   )
 }
 
-const inputClass =
-  'w-full rounded-lg border border-zinc-800 bg-zinc-950/80 px-4 py-3.5 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none transition-shadow focus:border-brand-500/60 focus:shadow-[0_0_0_1px_rgba(168,85,247,0.35),0_0_24px_rgba(168,85,247,0.22)]'
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+type FormState = {
+  company: string
+  email: string
+  phone: string
+  topic: string
+  message: string
+}
+
+type FieldKey = 'company' | 'email' | 'message'
+
+type FieldErrors = Partial<Record<FieldKey, string>>
+
+function validateForm(values: FormState): FieldErrors {
+  const errors: FieldErrors = {}
+  if (!values.company.trim()) errors.company = 'Company name is required.'
+  if (!values.email.trim()) errors.email = 'Work email is required.'
+  else if (!EMAIL_RE.test(values.email.trim())) errors.email = 'Enter a valid email address.'
+  if (!values.message.trim()) errors.message = 'Please describe your request.'
+  else if (values.message.trim().length < 12) errors.message = 'Add a bit more detail (at least 12 characters).'
+  return errors
+}
+
+const panelInner =
+  'rounded-2xl border border-zinc-800/90 bg-zinc-950/55 p-6 shadow-[0_0_0_1px_rgba(24,24,27,0.5)] backdrop-blur-xl sm:p-8'
 
 export default function ContactPage() {
+  const formErrorsId = useId()
   const [menuOpen, setMenuOpen] = useState(false)
   const [submitted, setSubmitted] = useState(false)
-  const [form, setForm] = useState({
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errors, setErrors] = useState<FieldErrors>({})
+  const [form, setForm] = useState<FormState>({
     company: '',
     email: '',
     phone: '',
@@ -78,38 +107,97 @@ export default function ContactPage() {
     message: '',
   })
 
-  function handleSubmit(e: FormEvent) {
+  const closeMenu = useCallback(() => setMenuOpen(false), [])
+
+  useEffect(() => {
+    if (!menuOpen) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') closeMenu()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [menuOpen, closeMenu])
+
+  function fieldClass(name: FieldKey) {
+    const invalid = attemptedSubmit && errors[name]
+    return [
+      'w-full rounded-xl border bg-zinc-950/90 px-4 py-3.5 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none transition-shadow',
+      invalid
+        ? 'border-red-500/50 focus:border-red-400/70 focus:shadow-[0_0_0_1px_rgba(248,113,113,0.35)]'
+        : 'border-zinc-800 focus:border-brand-500/60 focus:shadow-[0_0_0_1px_rgba(168,85,247,0.35),0_0_24px_rgba(168,85,247,0.18)]',
+    ].join(' ')
+  }
+
+  function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((f) => ({ ...f, [key]: value }))
+    if (attemptedSubmit && (key === 'company' || key === 'email' || key === 'message')) {
+      setErrors((prev) => {
+        const next = { ...prev }
+        delete next[key as FieldKey]
+        return next
+      })
+    }
+  }
+
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    setAttemptedSubmit(true)
+    const nextErrors = validateForm(form)
+    setErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0) {
+      setSubmitted(false)
+      return
+    }
+    setIsSubmitting(true)
+    await new Promise((r) => setTimeout(r, 450))
+    setIsSubmitting(false)
     setSubmitted(true)
   }
 
-  return (
-    <div id="top" className="min-h-svh bg-black text-zinc-200">
-      {/* subtle grid + vignette */}
-      <div
-        className="pointer-events-none fixed inset-0 opacity-[0.07]"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(168,85,247,0.35) 1px, transparent 1px), linear-gradient(90deg, rgba(168,85,247,0.35) 1px, transparent 1px)',
-          backgroundSize: '48px 48px',
-        }}
-      />
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(168,85,247,0.18),transparent)]" />
+  const directContact = [
+    {
+      icon: IconEnvelope,
+      label: 'Email',
+      value: 'contact@cybershield.io',
+      href: 'mailto:contact@cybershield.io',
+    },
+    {
+      icon: IconPhone,
+      label: 'Phone',
+      value: '+1 (555) 123-4567',
+      href: 'tel:+15551234567',
+    },
+    {
+      icon: IconMap,
+      label: 'Office',
+      value: 'San Francisco, CA',
+      href: 'https://maps.google.com/?q=San+Francisco+CA',
+    },
+  ] as const
 
-      <header className="relative z-20 border-b border-zinc-900/80 bg-black/70 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-          <a href="#top" className="flex items-baseline gap-0 font-extrabold tracking-tight">
+  return (
+    <div id="top" className="relative min-h-svh text-zinc-200">
+      <GalaxyBackdrop />
+
+      {/* Foreground stack: above GalaxyBackdrop z-0 */}
+      <div className="relative z-10 bg-transparent">
+      <a
+        href="#main-content"
+        className="fixed left-4 top-4 z-[100] rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-lg opacity-0 pointer-events-none transition-opacity focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-200"
+      >
+        Skip to main content
+      </a>
+
+      <header className="sticky top-0 z-30 border-b border-zinc-800/60 bg-black/55 backdrop-blur-xl supports-[backdrop-filter]:bg-black/40">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
+          <a href="#top" className="flex items-baseline gap-0 font-extrabold tracking-tight focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400">
             <span className="text-lg text-white sm:text-xl">TRUST</span>
             <span className="text-lg text-brand-500 sm:text-xl">INC</span>
           </a>
 
-          <nav className="hidden items-center gap-8 text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-300 md:flex">
+          <nav className="hidden items-center gap-7 text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-400 md:flex lg:gap-9" aria-label="Primary">
             {navLinks.map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                className="transition-colors hover:text-white"
-              >
+              <a key={link.label} href={link.href} className="transition-colors hover:text-white">
                 {link.label}
               </a>
             ))}
@@ -117,13 +205,13 @@ export default function ContactPage() {
 
           <button
             type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-800 text-zinc-200 md:hidden"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-800 text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-950/80 md:hidden"
             aria-expanded={menuOpen}
             aria-controls="mobile-nav"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
             onClick={() => setMenuOpen((o) => !o)}
           >
-            <span className="sr-only">Toggle menu</span>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
               {menuOpen ? (
                 <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
               ) : (
@@ -134,17 +222,14 @@ export default function ContactPage() {
         </div>
 
         {menuOpen ? (
-          <div
-            id="mobile-nav"
-            className="border-t border-zinc-900 bg-black/95 px-4 py-4 md:hidden"
-          >
-            <nav className="flex flex-col gap-3 text-sm font-semibold uppercase tracking-widest">
+          <div id="mobile-nav" className="border-t border-zinc-800/80 bg-black/90 px-4 py-4 md:hidden">
+            <nav className="flex flex-col gap-1 text-sm font-semibold uppercase tracking-widest" aria-label="Mobile primary">
               {navLinks.map((link) => (
                 <a
                   key={link.label}
                   href={link.href}
-                  className="py-2 text-zinc-300 hover:text-white"
-                  onClick={() => setMenuOpen(false)}
+                  className="rounded-lg px-2 py-3 text-zinc-300 hover:bg-zinc-900/80 hover:text-white"
+                  onClick={closeMenu}
                 >
                   {link.label}
                 </a>
@@ -154,255 +239,335 @@ export default function ContactPage() {
         ) : null}
       </header>
 
-      <main>
-        <section className="relative z-10 px-4 pb-12 pt-14 text-center sm:px-6 sm:pt-20 lg:px-8">
-          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.35em] text-brand-400/90">
-            Software & cybersecurity
-          </p>
-          <h1 className="bg-gradient-to-br from-brand-400 via-brand-500 to-brand-600 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent sm:text-5xl md:text-6xl">
-            Contact Us
-          </h1>
-          <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-zinc-400 sm:text-lg">
-            Get in touch for expert cybersecurity solutions and support.
-          </p>
-        </section>
-
-        {/* Trust strip — adds credibility beyond the original mock */}
-        <section id="services" className="relative z-10 border-y border-zinc-900/80 bg-zinc-950/50">
-          <div className="mx-auto grid max-w-6xl gap-6 px-4 py-10 sm:grid-cols-3 sm:px-6 lg:px-8">
-            {[
-              {
-                icon: IconHeadset,
-                title: '24/7 security desk',
-                text: 'Critical incidents escalated in minutes.',
-              },
-              {
-                icon: IconClock,
-                title: 'Avg. response under 2h',
-                text: 'Business-hours quotes same day.',
-              },
-              {
-                icon: IconShield,
-                title: 'Enterprise-grade trust',
-                text: 'SOC 2 aligned processes & NDAs on request.',
-              },
-            ].map((item) => (
-              <div
-                key={item.title}
-                className="flex gap-4 rounded-xl border border-zinc-800/80 bg-black/40 p-4"
-              >
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-brand-500/40 text-brand-400">
-                  <item.icon className="h-6 w-6" />
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-semibold text-white">{item.title}</p>
-                  <p className="mt-1 text-sm text-zinc-500">{item.text}</p>
-                </div>
-              </div>
-            ))}
+      <main id="main-content">
+        {/* Hero */}
+        <section className="relative z-10 px-4 pb-16 pt-16 sm:px-6 sm:pb-20 sm:pt-20 lg:px-8" aria-labelledby="hero-heading">
+          <div className="mx-auto max-w-3xl text-center">
+            <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.4em] text-brand-400/95">
+              Enterprise software &amp; cybersecurity
+            </p>
+            <h1
+              id="hero-heading"
+              className="bg-gradient-to-br from-brand-400 via-brand-500 to-brand-600 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent sm:text-5xl md:text-[3.25rem] md:leading-tight"
+            >
+              Contact Us
+            </h1>
+            <div className="mx-auto mt-6 h-px w-24 bg-gradient-to-r from-transparent via-brand-500/70 to-transparent" aria-hidden />
+            <p className="mx-auto mt-6 max-w-xl text-pretty text-base leading-relaxed text-zinc-400 sm:text-lg">
+              Partner with specialists for assessments, architecture, and ongoing protection. Share your context—we’ll
+              respond with a clear next step.
+            </p>
           </div>
         </section>
 
-        <section id="contact" className="relative z-10 mx-auto max-w-6xl scroll-mt-28 px-4 py-16 sm:px-6 lg:px-8">
-          <div className="grid gap-12 lg:grid-cols-2 lg:gap-16 lg:items-start">
-            <div id="solution">
-              <h2 className="text-left text-xl font-bold text-white sm:text-2xl">Send a message</h2>
-              <p className="mt-2 text-left text-sm text-zinc-500">
-                Share a few details—we’ll route your request to the right specialist.
+        {/* Capabilities */}
+        <section
+          id="services"
+          className="relative z-10 scroll-mt-28 border-y border-zinc-800/50 bg-zinc-950/25 backdrop-blur-sm"
+          aria-labelledby="capabilities-heading"
+        >
+          <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8 lg:py-14">
+            <div className="mb-10 max-w-2xl">
+              <h2 id="capabilities-heading" className="text-lg font-bold tracking-tight text-white sm:text-xl">
+                How we support you
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+                Consistent engagement model from first conversation through delivery.
               </p>
-
-              <form className="mt-8 space-y-5" onSubmit={handleSubmit} noValidate>
-                <div>
-                  <label htmlFor="company" className="mb-1.5 block text-left text-xs font-medium uppercase tracking-wider text-zinc-400">
-                    Company name
-                  </label>
-                  <input
-                    id="company"
-                    name="company"
-                    type="text"
-                    autoComplete="organization"
-                    placeholder="Acme Corp"
-                    required
-                    value={form.company}
-                    onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))}
-                    className={inputClass}
-                  />
-                </div>
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="email" className="mb-1.5 block text-left text-xs font-medium uppercase tracking-wider text-zinc-400">
-                      Email
-                    </label>
-                    <input
-                      id="email"
-                      name="email"
-                      type="email"
-                      autoComplete="email"
-                      placeholder="you@company.com"
-                      required
-                      value={form.email}
-                      onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="phone" className="mb-1.5 block text-left text-xs font-medium uppercase tracking-wider text-zinc-400">
-                      Phone number
-                    </label>
-                    <input
-                      id="phone"
-                      name="phone"
-                      type="tel"
-                      autoComplete="tel"
-                      placeholder="+1 (555) 000-0000"
-                      value={form.phone}
-                      onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                      className={inputClass}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label htmlFor="topic" className="mb-1.5 block text-left text-xs font-medium uppercase tracking-wider text-zinc-400">
-                    Inquiry type
-                  </label>
-                  <select
-                    id="topic"
-                    name="topic"
-                    value={form.topic}
-                    onChange={(e) => setForm((f) => ({ ...f, topic: e.target.value }))}
-                    className={`${inputClass} appearance-none bg-zinc-950 pr-10`}
-                  >
-                    <option value="general">General inquiry</option>
-                    <option value="quote">Request a quote</option>
-                    <option value="demo">Schedule a demo</option>
-                    <option value="support">Technical support</option>
-                    <option value="partnership">Partnership</option>
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="message" className="mb-1.5 block text-left text-xs font-medium uppercase tracking-wider text-zinc-400">
-                    Message
-                  </label>
-                  <textarea
-                    id="message"
-                    name="message"
-                    rows={5}
-                    required
-                    placeholder="Tell us about your environment, timelines, and goals…"
-                    value={form.message}
-                    onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
-                    className={`${inputClass} min-h-[140px] resize-y`}
-                  />
-                </div>
-
-                {submitted ? (
-                  <p className="rounded-lg border border-brand-500/30 bg-brand-500/10 px-4 py-3 text-left text-sm text-brand-200" role="status">
-                    Thanks—your message is received. This is a front-end demo; wire your API here to send email or CRM
-                    tickets.
-                  </p>
-                ) : null}
-
-                <div className="flex flex-col items-stretch gap-4 pt-2 sm:flex-row sm:items-center sm:justify-between">
-                  <button
-                    type="submit"
-                    className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-brand-600 to-brand-500 px-10 py-4 text-sm font-bold uppercase tracking-[0.2em] text-white shadow-[0_0_40px_rgba(168,85,247,0.35)] transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400"
-                  >
-                    Get a quote
-                  </button>
-                  <p className="text-center text-xs text-zinc-500 sm:text-left">
-                    By submitting, you agree to our{' '}
-                    <a className="text-brand-400 underline-offset-2 hover:underline" href="#privacy">
-                      privacy terms
-                    </a>
-                    .
-                  </p>
-                </div>
-              </form>
             </div>
-
-            <aside className="space-y-6 lg:sticky lg:top-28">
-              <h2 className="text-xl font-bold text-white sm:text-2xl">Direct lines</h2>
-              <p className="text-sm text-zinc-500">
-                Prefer email or phone? Reach us directly—our team operates across North America and EMEA.
-              </p>
-
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {[
                 {
-                  icon: IconEnvelope,
-                  label: 'Email',
-                  value: 'email@cybersecurity.com',
-                  href: 'mailto:email@cybersecurity.com',
+                  icon: IconHeadset,
+                  title: '24/7 security desk',
+                  text: 'Critical incidents triaged and escalated without delay.',
                 },
                 {
-                  icon: IconPhone,
-                  label: 'Phone',
-                  value: '+1 (0123) 456-7890',
-                  href: 'tel:+101234567890',
+                  icon: IconClock,
+                  title: 'Rapid response',
+                  text: 'Business-hours inquiries answered the same day.',
                 },
                 {
-                  icon: IconMap,
-                  label: 'Office Location',
-                  value: '123 Cybersecurity, 22170',
-                  href: 'https://maps.google.com',
+                  icon: IconShield,
+                  title: 'Enterprise assurance',
+                  text: 'NDAs, questionnaires, and compliance-friendly workflows.',
                 },
-              ].map((row) => (
-                <a
-                  key={row.label}
-                  href={row.href}
-                  className="flex gap-4 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 transition hover:border-brand-500/40 hover:bg-zinc-900/50"
-                  {...(row.href.startsWith('http') ? { target: '_blank', rel: 'noreferrer' } : {})}
+              ].map((item) => (
+                <article
+                  key={item.title}
+                  className="group flex gap-4 rounded-2xl border border-zinc-800/80 bg-black/35 p-5 transition hover:border-brand-500/25 hover:bg-black/50"
                 >
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-brand-500/50 text-brand-400">
-                    <row.icon className="h-6 w-6" />
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-brand-500/35 bg-brand-500/5 text-brand-400 transition group-hover:border-brand-500/50">
+                    <item.icon className="h-6 w-6" />
                   </div>
                   <div className="min-w-0 text-left">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">{row.label}</p>
-                    <p className="mt-1 text-sm font-medium text-white">{row.value}</p>
+                    <h3 className="text-sm font-semibold text-white">{item.title}</h3>
+                    <p className="mt-1.5 text-sm leading-relaxed text-zinc-500">{item.text}</p>
                   </div>
-                </a>
+                </article>
               ))}
-
-              <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-950/40 p-5 text-left">
-                <p className="text-xs font-semibold uppercase tracking-wider text-brand-400">Business hours</p>
-                <p className="mt-2 text-sm text-zinc-400">
-                  Mon–Fri · 8:00–20:00 PT · Emergency line for contracted clients 24/7
-                </p>
-              </div>
-            </aside>
+            </div>
           </div>
         </section>
 
-        {/* Lightweight FAQ — improves page without clutter */}
-        <section id="resources" className="relative z-10 scroll-mt-28 border-t border-zinc-900 bg-zinc-950/30 py-16">
+        {/* Contact workspace */}
+        <section id="contact" className="relative z-10 scroll-mt-28 px-4 py-16 sm:px-6 lg:px-8 lg:py-24" aria-labelledby="contact-heading">
+          <div className="mx-auto max-w-6xl">
+            <header className="mb-10 max-w-2xl lg:mb-12">
+              <h2 id="contact-heading" className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+                Start a conversation
+              </h2>
+              <p className="mt-3 text-sm leading-relaxed text-zinc-500 sm:text-base">
+                Use the secure form for structured requests, or reach us directly if you already know what you need.
+              </p>
+            </header>
+
+            <div className="rounded-[1.35rem] border border-zinc-800/70 bg-gradient-to-b from-zinc-950/80 to-black/60 p-1 shadow-[0_0_80px_-20px_rgba(168,85,247,0.25)] backdrop-blur-xl sm:p-1.5">
+              {/* No overflow-hidden — it can clip form fields above the submit button in some browsers */}
+              <div className="grid gap-px rounded-[1.2rem] bg-zinc-800/40 lg:grid-cols-[1.05fr_0.95fr]">
+                <div id="solution" className={`${panelInner} rounded-b-none rounded-t-[1.15rem] lg:rounded-bl-[1.15rem] lg:rounded-br-none lg:rounded-tr-[1.15rem]`}>
+                  <h3 className="text-lg font-semibold text-white">Project inquiry</h3>
+                  <p className="mt-1 text-sm text-zinc-500">Fields marked with * are required.</p>
+
+                  <form className="mt-8 space-y-5" onSubmit={handleSubmit} noValidate aria-describedby={attemptedSubmit ? formErrorsId : undefined}>
+                    <div id={formErrorsId} className="sr-only" aria-live="polite">
+                      {attemptedSubmit && Object.keys(errors).length > 0
+                        ? `Please fix ${Object.keys(errors).length} field${Object.keys(errors).length > 1 ? 's' : ''} before submitting.`
+                        : ''}
+                    </div>
+
+                    <div>
+                      <label htmlFor="company" className="mb-1.5 block text-left text-xs font-medium uppercase tracking-wider text-zinc-400">
+                        Company name <span className="text-brand-400">*</span>
+                      </label>
+                      <input
+                        id="company"
+                        name="company"
+                        type="text"
+                        autoComplete="organization"
+                        placeholder="Organization legal name"
+                        required
+                        value={form.company}
+                        onChange={(e) => updateField('company', e.target.value)}
+                        className={fieldClass('company')}
+                        aria-invalid={attemptedSubmit && !!errors.company}
+                        aria-describedby={attemptedSubmit && errors.company ? 'company-error' : undefined}
+                      />
+                      {attemptedSubmit && errors.company ? (
+                        <p id="company-error" className="mt-1.5 text-left text-xs text-red-400/90" role="alert">
+                          {errors.company}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="grid gap-5 sm:grid-cols-2">
+                      <div>
+                        <label htmlFor="email" className="mb-1.5 block text-left text-xs font-medium uppercase tracking-wider text-zinc-400">
+                          Work email <span className="text-brand-400">*</span>
+                        </label>
+                        <input
+                          id="email"
+                          name="email"
+                          type="email"
+                          autoComplete="email"
+                          placeholder="name@company.com"
+                          required
+                          value={form.email}
+                          onChange={(e) => updateField('email', e.target.value)}
+                          className={fieldClass('email')}
+                          aria-invalid={attemptedSubmit && !!errors.email}
+                          aria-describedby={attemptedSubmit && errors.email ? 'email-error' : undefined}
+                        />
+                        {attemptedSubmit && errors.email ? (
+                          <p id="email-error" className="mt-1.5 text-left text-xs text-red-400/90" role="alert">
+                            {errors.email}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div>
+                        <label htmlFor="phone" className="mb-1.5 block text-left text-xs font-medium uppercase tracking-wider text-zinc-400">
+                          Phone <span className="text-zinc-600">(optional)</span>
+                        </label>
+                        <input
+                          id="phone"
+                          name="phone"
+                          type="tel"
+                          autoComplete="tel"
+                          placeholder="+1 (555) 000-0000"
+                          value={form.phone}
+                          onChange={(e) => updateField('phone', e.target.value)}
+                          className="w-full rounded-xl border border-zinc-800 bg-zinc-950/90 px-4 py-3.5 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none transition-shadow focus:border-brand-500/60 focus:shadow-[0_0_0_1px_rgba(168,85,247,0.35),0_0_24px_rgba(168,85,247,0.18)]"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label htmlFor="topic" className="mb-1.5 block text-left text-xs font-medium uppercase tracking-wider text-zinc-400">
+                        Inquiry type
+                      </label>
+                      <select
+                        id="topic"
+                        name="topic"
+                        value={form.topic}
+                        onChange={(e) => updateField('topic', e.target.value)}
+                        className="w-full cursor-pointer appearance-none rounded-xl border border-zinc-800 bg-zinc-950/90 bg-[length:1rem] bg-[right_1rem_center] bg-no-repeat px-4 py-3.5 pr-11 text-sm text-zinc-100 outline-none transition-shadow focus:border-brand-500/60 focus:shadow-[0_0_0_1px_rgba(168,85,247,0.35),0_0_24px_rgba(168,85,247,0.18)]"
+                        style={{
+                          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23a1a1aa'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`,
+                        }}
+                      >
+                        <option value="general">General inquiry</option>
+                        <option value="quote">Request a quote</option>
+                        <option value="demo">Schedule a demo</option>
+                        <option value="support">Technical support</option>
+                        <option value="partnership">Partnership</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="message" className="mb-1.5 block text-left text-xs font-medium uppercase tracking-wider text-zinc-400">
+                        Message <span className="text-brand-400">*</span>
+                      </label>
+                      <textarea
+                        id="message"
+                        name="message"
+                        rows={5}
+                        required
+                        placeholder="Scope, systems, compliance needs, and timeline…"
+                        value={form.message}
+                        onChange={(e) => updateField('message', e.target.value)}
+                        className={`${fieldClass('message')} min-h-[150px] resize-y`}
+                        aria-invalid={attemptedSubmit && !!errors.message}
+                        aria-describedby={attemptedSubmit && errors.message ? 'message-error' : undefined}
+                      />
+                      {attemptedSubmit && errors.message ? (
+                        <p id="message-error" className="mt-1.5 text-left text-xs text-red-400/90" role="alert">
+                          {errors.message}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    {submitted ? (
+                      <p
+                        className="rounded-xl border border-brand-500/35 bg-brand-500/10 px-4 py-3.5 text-left text-sm leading-relaxed text-brand-100"
+                        role="status"
+                      >
+                        Thank you. Your inquiry has been recorded. Connect this form to your API, email service, or CRM
+                        to complete delivery.
+                      </p>
+                    ) : null}
+
+                    <div className="flex flex-col gap-4 pt-2 sm:flex-row sm:items-center sm:justify-between">
+                      <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="inline-flex min-h-[3.25rem] min-w-[12rem] items-center justify-center rounded-full bg-gradient-to-r from-brand-600 to-brand-500 px-10 text-sm font-bold uppercase tracking-[0.18em] text-white shadow-[0_0_48px_rgba(168,85,247,0.3)] transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isSubmitting ? 'Sending…' : 'Get a quote'}
+                      </button>
+                      <p className="text-center text-xs leading-relaxed text-zinc-500 sm:max-w-xs sm:text-left">
+                        By submitting, you agree to our{' '}
+                        <a className="text-brand-400 underline-offset-2 hover:underline" href="#privacy">
+                          privacy terms
+                        </a>
+                        .
+                      </p>
+                    </div>
+                  </form>
+                </div>
+
+                <aside
+                  className={`${panelInner} rounded-none rounded-b-[1.15rem] border-t-0 lg:rounded-bl-none lg:rounded-br-[1.15rem] lg:rounded-tr-none lg:border-l lg:border-t-0 lg:border-zinc-800/80`}
+                >
+                  <h3 className="text-lg font-semibold text-white">Direct contact</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-zinc-500">
+                    Prefer a direct line? Our team covers North America and EMEA business hours.
+                  </p>
+
+                  <ul className="mt-8 space-y-3">
+                    {directContact.map((row) => (
+                      <li key={row.label}>
+                        <a
+                          href={row.href}
+                          className="flex gap-4 rounded-xl border border-zinc-800/90 bg-black/30 p-4 transition hover:border-brand-500/35 hover:bg-black/45"
+                          {...(row.href.startsWith('http') ? { target: '_blank', rel: 'noreferrer' } : {})}
+                        >
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-brand-500/40 text-brand-400">
+                            <row.icon className="h-5 w-5" />
+                          </span>
+                          <span className="min-w-0 text-left">
+                            <span className="block text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                              {row.label}
+                            </span>
+                            <span className="mt-1 block text-sm font-medium text-white">{row.value}</span>
+                          </span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <div className="mt-8 rounded-xl border border-dashed border-zinc-700/90 bg-black/25 p-5 text-left">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-brand-400">Office hours</p>
+                    <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                      Monday–Friday · 08:00–20:00 PT · Contracted clients: 24/7 escalation path
+                    </p>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* FAQ */}
+        <section
+          id="resources"
+          className="relative z-10 scroll-mt-28 border-t border-zinc-800/50 bg-black/20 py-16 backdrop-blur-[2px] sm:py-20"
+          aria-labelledby="faq-heading"
+        >
           <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-            <h2 className="text-center text-2xl font-bold text-white">Common questions</h2>
-            <dl className="mt-10 space-y-6 text-left">
+            <h2 id="faq-heading" className="text-center text-xl font-bold text-white sm:text-2xl">
+              Frequently asked questions
+            </h2>
+            <p className="mx-auto mt-3 max-w-lg text-center text-sm text-zinc-500">
+              Straight answers before your first call.
+            </p>
+            <div className="mt-10 space-y-3">
               {[
                 {
-                  q: 'Do you sign NDAs and security questionnaires?',
-                  a: 'Yes. We routinely work under mutual NDAs and complete vendor assessments for enterprise procurement.',
+                  q: 'Do you sign NDAs and complete security questionnaires?',
+                  a: 'Yes. We routinely execute mutual NDAs and support vendor risk assessments for enterprise procurement.',
                 },
                 {
-                  q: 'Can you help with both product engineering and security operations?',
-                  a: 'TRUST INC delivers software delivery and managed detection—one partner for build and protect.',
+                  q: 'Can you combine product delivery with security operations?',
+                  a: 'TRUST INC offers secure engineering and detection-focused operations so you have one accountable partner.',
                 },
                 {
-                  q: 'What regions do you support?',
-                  a: 'Primary coverage in North America and EMEA with follow-the-sun escalation for critical issues.',
+                  q: 'Which regions do you support?',
+                  a: 'Primary coverage in North America and EMEA, with structured handoffs for after-hours critical issues.',
                 },
               ].map((faq) => (
-                <div key={faq.q} className="rounded-xl border border-zinc-800/90 bg-black/50 px-5 py-4">
-                  <dt className="font-semibold text-white">{faq.q}</dt>
-                  <dd className="mt-2 text-sm leading-relaxed text-zinc-500">{faq.a}</dd>
-                </div>
+                <details
+                  key={faq.q}
+                  className="group rounded-xl border border-zinc-800/90 bg-zinc-950/40 px-5 py-1 transition open:border-zinc-700/90 open:bg-zinc-950/55"
+                >
+                  <summary className="cursor-pointer list-none py-4 text-left text-sm font-semibold text-white marker:content-none [&::-webkit-details-marker]:hidden">
+                    <span className="flex items-center justify-between gap-3">
+                      {faq.q}
+                      <span className="text-brand-400 transition group-open:rotate-180" aria-hidden>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
+                    </span>
+                  </summary>
+                  <p className="border-t border-zinc-800/60 pb-4 pt-3 text-sm leading-relaxed text-zinc-500">{faq.a}</p>
+                </details>
               ))}
-            </dl>
+            </div>
           </div>
         </section>
       </main>
 
-      <footer className="relative z-10 mt-8 overflow-hidden border-t border-zinc-900/80">
-        {/* Footer-only atmosphere: distinct from main page (texture + purple network + haze) */}
+      <footer className="relative z-10 mt-6 overflow-hidden border-t border-zinc-900/80">
         <div
           className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,#07050f_0%,#030208_45%,#010103_100%)]"
           aria-hidden
@@ -512,13 +677,13 @@ export default function ContactPage() {
               <p className="text-xs font-bold uppercase tracking-widest text-white">Quick links</p>
               <ul className="mt-4 space-y-2 text-sm">
                 {(
-                [
-                  ['Home', '#top'],
-                  ['Services', '#services'],
-                  ['About', '#resources'],
-                  ['Contact', '#contact'],
-                ] as const
-              ).map(([t, href]) => (
+                  [
+                    ['Home', '#top'],
+                    ['Services', '#services'],
+                    ['About', '#resources'],
+                    ['Contact', '#contact'],
+                  ] as const
+                ).map(([t, href]) => (
                   <li key={t}>
                     <a className="text-zinc-300 transition hover:text-white" href={href}>
                       {t}
@@ -581,6 +746,7 @@ export default function ContactPage() {
           </div>
         </div>
       </footer>
+      </div>
     </div>
   )
 }

@@ -17,4 +17,69 @@
   body {
     @apply m-0 min-h-svh bg-black font-sans text-zinc-300;
   }
+
+  /* Ensure the app root grows with content (avoids clipped / “empty” viewport) */
+  /* Transparent so the fixed galaxy layer (z-0) shows through gaps in page chrome */
+  #root {
+    @apply relative min-h-svh bg-transparent;
+  }
+}
+
+@keyframes galaxy-nebula-drift-a {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translate(2%, 1%) scale(1.04);
+    opacity: 0.58;
+  }
+}
+
+@keyframes galaxy-nebula-drift-b {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translate(-2%, 2%) scale(1.05);
+    opacity: 0.52;
+  }
+}
+
+@keyframes galaxy-nebula-drift-c {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.38;
+  }
+  50% {
+    transform: translate(1%, -1.5%) scale(1.03);
+    opacity: 0.5;
+  }
+}
+
+.galaxy-nebula-a {
+  animation: galaxy-nebula-drift-a 48s ease-in-out infinite;
+}
+
+.galaxy-nebula-b {
+  animation: galaxy-nebula-drift-b 56s ease-in-out infinite;
+  animation-delay: -12s;
+}
+
+.galaxy-nebula-c {
+  animation: galaxy-nebula-drift-c 64s ease-in-out infinite;
+  animation-delay: -24s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .galaxy-nebula-a,
+  .galaxy-nebula-b,
+  .galaxy-nebula-c {
+    animation: none;
+    opacity: 0.45;
+  }
 }

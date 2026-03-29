@@ -710,13 +710,13 @@ export default function ContactPage() {
               <p className="text-xs font-bold uppercase tracking-widest text-white">Contact us</p>
               <ul className="mt-4 space-y-2 text-sm text-zinc-300">
                 <li>
-                  <a className="transition hover:text-white" href="mailto:contact@cybershield.io">
-                    contact@cybershield.io
+                  <a className="transition hover:text-white" href="mailto:muhammademraan33@gmail.com">
+                    muhammademraan33@gmail.com
                   </a>
                 </li>
                 <li>
-                  <a className="transition hover:text-white" href="tel:+15551234567">
-                    +1 (555) 123-4567
+                  <a className="transition hover:text-white" href="tel:+923449819081">
+                    +923449819081
                   </a>
                 </li>
                 <li>San Francisco, CA</li>
